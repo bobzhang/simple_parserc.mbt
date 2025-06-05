@@ -20,12 +20,12 @@ pub(all) type! ParseError {
 pub(all) type Parser[A] (Input) -> (A, Input)!ParseError
 
 ///|
-pub fn[A] Parser::run(self : Parser[A], input : Input) -> A!ParseError {
+pub fn[A] Parser::run(self : Self[A], input : Input) -> A!ParseError {
   self(input).0
 }
 
 ///|
-pub fn[A, B] Parser::bind(self : Parser[A], f : (A) -> Parser[B]) -> Parser[B] {
+pub fn[A, B] Parser::bind(self : Self[A], f : (A) -> Self[B]) -> Self[B] {
   fn(input) {
     let (v, rest) = self(input)
     f(v)(rest)
@@ -33,7 +33,7 @@ pub fn[A, B] Parser::bind(self : Parser[A], f : (A) -> Parser[B]) -> Parser[B] {
 }
 
 ///|
-pub fn[A] Parser::pure(x : A) -> Parser[A] {
+pub fn[A] Parser::pure(x : A) -> Self[A] {
   fn(input) { (x, input) }
 }
 
@@ -50,7 +50,7 @@ pub impl[A] BitOr for Parser[A] with lor(self, y) {
 }
 
 ///|
-pub fn Parser::satisfy(f : (Char) -> Bool) -> Parser[Char] {
+pub fn Parser::satisfy(f : (Char) -> Bool) -> Self[Char] {
   fn(input) {
     let { chars, row, col } = input
     match chars {
@@ -66,7 +66,7 @@ pub fn Parser::satisfy(f : (Char) -> Bool) -> Parser[Char] {
 }
 
 ///|
-pub fn[A] Parser::eof(x : A) -> Parser[A] {
+pub fn[A] Parser::eof(x : A) -> Self[A] {
   fn(input) {
     let { chars, row, col } = input
     match chars {
@@ -82,7 +82,7 @@ pub fn Parser::any(input : Input) -> (Char, Input)!ParseError {
 }
 
 ///|
-pub fn[A] Parser::label(x : Parser[A], s : String) -> Parser[A] {
+pub fn[A] Parser::label(x : Self[A], s : String) -> Self[A] {
   fn(input) {
     try x(input) catch {
       Expect(row~, col~, _) => raise Expect(row~, col~, s)
@@ -111,7 +111,7 @@ pub fn Parser::string(str : String) -> Parser[String] {
 }
 
 ///|
-pub fn[A, B] Parser::discard_left(self : Parser[A], y : Parser[B]) -> Parser[B] {
+pub fn[A, B] Parser::discard_left(self : Self[A], y : Self[B]) -> Self[B] {
   self.bind(fn { _ => y })
 }
 
@@ -133,18 +133,18 @@ pub fn[A, B, C] Parser::between(
 }
 
 ///|
-pub fn Parser::one_of(xs : String) -> Parser[Char] {
-  satisfy(String::contains_char(xs, _)) |> label("one of \{xs.iter()}}")
+pub fn Parser::one_of(xs : String) -> Self[Char] {
+  satisfy(String::contains_char(xs, _)) .label("one of \{xs.iter()}}")
 }
 
 ///|
-pub fn Parser::none_of(xs : String) -> Parser[Char] {
+pub fn Parser::none_of(xs : String) -> Self[Char] {
   satisfy(fn { ch => not(String::contains_char(xs, ch)) })
-  |> label("none of \{xs.iter()}}")
+  .label("none of \{xs.iter()}}")
 }
 
 ///|
-pub fn[A] foldl1(x : Parser[A], f : Parser[(A, A) -> A]) -> Parser[A] {
+pub fn[A] Parser::foldl1(x : Self[A], f : Self[(A, A) -> A]) -> Self[A] {
   fn go(a) {
     let acc = f.bind(fn { f => x.bind(fn { b => go(f(a, b)) }) })
     acc | pure(a)
@@ -154,12 +154,12 @@ pub fn[A] foldl1(x : Parser[A], f : Parser[(A, A) -> A]) -> Parser[A] {
 }
 
 ///|
-pub fn[A, B] Parser::map(self : Parser[A], f : (A) -> B) -> Parser[B] {
+pub fn[A, B] Parser::map(self : Self[A], f : (A) -> B) -> Self[B] {
   self.bind(fn { x => pure(f(x)) })
 }
 
 ///|
-pub fn[A] Parser::parens(self : Parser[A]) -> Parser[A] {
+pub fn[A] Parser::parens(self : Self[A]) -> Self[A] {
   self.between(open=char('('), close=char(')'))
 }
 
@@ -192,19 +192,19 @@ fnalias Parser::(
 ///|
 test {
   let input = Input::new("123456")
-  let digit = map(digit, fn { ch => ch.to_int() - '0'.to_int() })
-  let integer = foldl1(digit, pure(fn { acc, x => acc * 10 + x }))
+  let digit = Parser(digit).map(fn { ch => ch.to_int() - '0' })
+  let integer = digit.foldl1( pure(fn { acc, x => acc * 10 + x }))
   inspect(integer.run(input), content="123456")
-  let add = char('+') |> discard_left(pure(Int::op_add))
-  let sub = char('-') |> discard_left(pure(Int::op_sub))
-  let mul = char('*') |> discard_left(pure(Int::op_mul))
-  let div = char('/') |> discard_left(pure(Int::op_div))
+  let add = char('+').discard_left(pure(Int::op_add))
+  let sub = char('-').discard_left(pure(Int::op_sub))
+  let mul = char('*').discard_left(pure(Int::op_mul))
+  let div = char('/').discard_left(pure(Int::op_div))
   fn expr(input) -> (Int, Input)!ParseError {
-    foldl1(term, add | sub)(input)
+    Parser(term).foldl1( add | sub)(input)
   }
 
   fn term(input) -> (Int, Input)!ParseError {
-    foldl1(factor, mul | div)(input)
+    Parser(factor).foldl1(mul | div)(input)
   }
 
   fn factor(input) -> (Int, Input)!ParseError {
@@ -220,7 +220,7 @@ test {
 test "or" {
   let x = char('x')
   let y = char('y')
-  let parse = x | y |> label("x or y")
+  let parse = (x | y).label("x or y")
   let input = Input::new("x")
   inspect(
     try? parse(input),
