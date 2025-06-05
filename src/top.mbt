@@ -20,6 +20,11 @@ pub(all) type! ParseError {
 pub typealias Parser[A] = (Input) -> (A, Input)!ParseError
 
 ///|
+pub fn[A] run(x : Parser[A], input : Input) -> A!ParseError {
+  x(input).0
+}
+
+///|
 pub fn[A, B] bind(x : Parser[A], f : (A) -> Parser[B]) -> Parser[B] {
   fn(input) {
     let (v, rest) = x(input)
@@ -165,12 +170,7 @@ test {
   let input = Input::new("123456")
   let digit = map(digit, fn { ch => ch.to_int() - '0'.to_int() })
   let integer = foldl1(digit, pure(fn { acc, x => acc * 10 + x }))
-  inspect(
-    try? integer(input),
-    content=
-      #|Ok((123456, {chars: "", row: 0, col: 6}))
-    ,
-  )
+  inspect(run(integer, input), content="123456")
   let add = char('+') |> discard_left(pure(Int::op_add))
   let sub = char('-') |> discard_left(pure(Int::op_sub))
   let mul = char('*') |> discard_left(pure(Int::op_mul))
@@ -188,12 +188,8 @@ test {
   }
 
   let input = Input::new("(1+2)*3")
-  inspect(
-    try? expr(input),
-    content=
-      #|Ok((9, {chars: "", row: 0, col: 7}))
-    ,
-  )
+  inspect(run(expr, input), content="9")
+  inspect(run(expr, Input::new("3*3+4*4")), content="25")
 }
 
 ///|
