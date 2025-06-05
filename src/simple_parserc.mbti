@@ -5,41 +5,7 @@ import(
 )
 
 // Values
-fn any(Input) -> (Char, Input)!ParseError
-
-fn[A, B, C] between((Input) -> (A, Input)!ParseError, open~ : (Input) -> (B, Input)!ParseError, close~ : (Input) -> (C, Input)!ParseError) -> (Input) -> (A, Input)!ParseError
-
-fn[A, B] bind((Input) -> (A, Input)!ParseError, (A) -> (Input) -> (B, Input)!ParseError) -> (Input) -> (B, Input)!ParseError
-
-fn char(Char) -> (Input) -> (Char, Input)!ParseError
-
-fn[A, B] discard_left((Input) -> (A, Input)!ParseError, (Input) -> (B, Input)!ParseError) -> (Input) -> (B, Input)!ParseError
-
-fn[A, B] discard_right((Input) -> (A, Input)!ParseError, (Input) -> (B, Input)!ParseError) -> (Input) -> (A, Input)!ParseError
-
-fn[A] eof(A) -> (Input) -> (A, Input)!ParseError
-
-fn[A] foldl1((Input) -> (A, Input)!ParseError, (Input) -> ((A, A) -> A, Input)!ParseError) -> (Input) -> (A, Input)!ParseError
-
-fn[A] label((Input) -> (A, Input)!ParseError, String) -> (Input) -> (A, Input)!ParseError
-
-fn[A, B] map((Input) -> (A, Input)!ParseError, (A) -> B) -> (Input) -> (B, Input)!ParseError
-
-fn none_of(String) -> (Input) -> (Char, Input)!ParseError
-
-fn one_of(String) -> (Input) -> (Char, Input)!ParseError
-
-fn[A] or((Input) -> (A, Input)!ParseError, (Input) -> (A, Input)!ParseError) -> (Input) -> (A, Input)!ParseError
-
-fn[A] parens((Input) -> (A, Input)!ParseError) -> (Input) -> (A, Input)!ParseError
-
-fn[A] pure(A) -> (Input) -> (A, Input)!ParseError
-
-fn[A] run((Input) -> (A, Input)!ParseError, Input) -> A!ParseError
-
-fn satisfy((Char) -> Bool) -> (Input) -> (Char, Input)!ParseError
-
-fn string(String) -> (Input) -> (String, Input)!ParseError
+fn[A] foldl1(Parser[A], Parser[(A, A) -> A]) -> Parser[A]
 
 // Types and methods
 pub(all) struct Input {
@@ -56,8 +22,27 @@ pub(all) type! ParseError {
 }
 impl Show for ParseError
 
+pub(all) type Parser[A] (Input) -> (A, Input)!ParseError
+fn Parser::any(Input) -> (Char, Input)!ParseError
+fn[A, B, C] Parser::between(Self[A], open~ : Self[B], close~ : Self[C]) -> Self[A]
+fn[A, B] Parser::bind(Self[A], (A) -> Self[B]) -> Self[B]
+fn Parser::char(Char) -> Self[Char]
+fn Parser::digit(Input) -> (Char, Input)!ParseError
+fn[A, B] Parser::discard_left(Self[A], Self[B]) -> Self[B]
+fn[A, B] Parser::discard_right(Self[A], Self[B]) -> Self[A]
+fn[A] Parser::eof(A) -> Self[A]
+fn[A] Parser::label(Self[A], String) -> Self[A]
+fn[A, B] Parser::map(Self[A], (A) -> B) -> Self[B]
+fn Parser::none_of(String) -> Self[Char]
+fn Parser::one_of(String) -> Self[Char]
+fn[A] Parser::parens(Self[A]) -> Self[A]
+fn[A] Parser::pure(A) -> Self[A]
+fn[A] Parser::run(Self[A], Input) -> A!ParseError
+fn Parser::satisfy((Char) -> Bool) -> Self[Char]
+fn Parser::string(String) -> Self[String]
+impl[A] BitOr for Parser[A]
+
 // Type aliases
-pub typealias Parser[A] = (Input) -> (A, Input)!ParseError
 
 // Traits
 

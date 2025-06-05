@@ -50,7 +50,7 @@ pub impl[A] BitOr for Parser[A] with lor(self, y) {
 }
 
 ///|
-pub fn satisfy(f : (Char) -> Bool) -> Parser[Char] {
+pub fn Parser::satisfy(f : (Char) -> Bool) -> Parser[Char] {
   fn(input) {
     let { chars, row, col } = input
     match chars {
@@ -66,7 +66,7 @@ pub fn satisfy(f : (Char) -> Bool) -> Parser[Char] {
 }
 
 ///|
-pub fn[A] eof(x : A) -> Parser[A] {
+pub fn[A] Parser::eof(x : A) -> Parser[A] {
   fn(input) {
     let { chars, row, col } = input
     match chars {
@@ -77,12 +77,12 @@ pub fn[A] eof(x : A) -> Parser[A] {
 }
 
 ///|
-pub fn any(input : Input) -> (Char, Input)!ParseError {
+pub fn Parser::any(input : Input) -> (Char, Input)!ParseError {
   satisfy(fn { _ => true })(input)
 }
 
 ///|
-pub fn[A] label(x : Parser[A], s : String) -> Parser[A] {
+pub fn[A] Parser::label(x : Parser[A], s : String) -> Parser[A] {
   fn(input) {
     try x(input) catch {
       Expect(row~, col~, _) => raise Expect(row~, col~, s)
@@ -93,12 +93,12 @@ pub fn[A] label(x : Parser[A], s : String) -> Parser[A] {
 }
 
 ///|
-pub fn char(ch : Char) -> Parser[Char] {
-  satisfy(fn { c => c == ch }) |> label(ch.to_string())
+pub fn Parser::char(ch : Char) -> Parser[Char] {
+  satisfy(fn { c => c == ch }).label(ch.to_string())
 }
 
 ///|
-pub fn string(str : String) -> Parser[String] {
+pub fn Parser::string(str : String) -> Parser[String] {
   fn(input) {
     guard not(str.contains_char('\n')) else { panic() }
     let { chars, row, col } = input
@@ -111,13 +111,16 @@ pub fn string(str : String) -> Parser[String] {
 }
 
 ///|
-pub fn[A, B] discard_left(x : Parser[A], y : Parser[B]) -> Parser[B] {
-  x.bind(fn { _ => y })
+pub fn[A, B] Parser::discard_left(self : Parser[A], y : Parser[B]) -> Parser[B] {
+  self.bind(fn { _ => y })
 }
 
 ///|
-pub fn[A, B] discard_right(x : Parser[A], y : Parser[B]) -> Parser[A] {
-  x.bind(fn { r => y.bind(fn { _ => pure(r) }) })
+pub fn[A, B] Parser::discard_right(
+  self : Parser[A],
+  y : Parser[B]
+) -> Parser[A] {
+  self.bind(fn { r => y.bind(fn { _ => pure(r) }) })
 }
 
 ///|
@@ -126,7 +129,7 @@ pub fn[A, B, C] Parser::between(
   open~ : Parser[B],
   close~ : Parser[C]
 ) -> Parser[A] {
-  open |> discard_left(self) |> discard_right(close)
+  open.discard_left(self).discard_right(close)
 }
 
 ///|
@@ -151,8 +154,8 @@ pub fn[A] foldl1(x : Parser[A], f : Parser[(A, A) -> A]) -> Parser[A] {
 }
 
 ///|
-pub fn[A, B] map(x : Parser[A], f : (A) -> B) -> Parser[B] {
-  x.bind(fn { x => pure(f(x)) })
+pub fn[A, B] Parser::map(self : Parser[A], f : (A) -> B) -> Parser[B] {
+  self.bind(fn { x => pure(f(x)) })
 }
 
 ///|
@@ -161,12 +164,30 @@ pub fn[A] Parser::parens(self : Parser[A]) -> Parser[A] {
 }
 
 ///|
-fn digit(input : Input) -> (Char, Input)!ParseError {
+pub fn Parser::digit(input : Input) -> (Char, Input)!ParseError {
   satisfy(Char::is_ascii_digit)(input)
 }
 
 ///|
-fnalias Parser::pure
+fnalias Parser::(
+  any,
+  between,
+  bind,
+  char,
+  discard_left,
+  discard_right,
+  eof,
+  label,
+  map,
+  none_of,
+  one_of,
+  parens,
+  pure,
+  run,
+  satisfy,
+  string,
+  digit
+)
 
 ///|
 test {
