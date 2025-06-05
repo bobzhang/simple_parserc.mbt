@@ -17,30 +17,30 @@ pub(all) type! ParseError {
 } derive(Show)
 
 ///|
-pub typealias Parser[A] = (Input) -> (A, Input)!ParseError
+pub(all) type Parser[A] (Input) -> (A, Input)!ParseError
 
 ///|
-pub fn[A] run(x : Parser[A], input : Input) -> A!ParseError {
-  x(input).0
+pub fn[A] Parser::run(self : Parser[A], input : Input) -> A!ParseError {
+  self(input).0
 }
 
 ///|
-pub fn[A, B] bind(x : Parser[A], f : (A) -> Parser[B]) -> Parser[B] {
+pub fn[A, B] Parser::bind(self : Parser[A], f : (A) -> Parser[B]) -> Parser[B] {
   fn(input) {
-    let (v, rest) = x(input)
+    let (v, rest) = self(input)
     f(v)(rest)
   }
 }
 
 ///|
-pub fn[A] pure(x : A) -> Parser[A] {
+pub fn[A] Parser::pure(x : A) -> Parser[A] {
   fn(input) { (x, input) }
 }
 
 ///|
-pub fn[A] or(x : Parser[A], y : Parser[A]) -> Parser[A] {
+pub impl[A] BitOr for Parser[A] with lor(self, y) {
   fn(input) {
-    try x(input) catch {
+    try self(input) catch {
       e =>
         try y(input) catch {
           e_ => raise Many([e, e_])
@@ -112,30 +112,30 @@ pub fn string(str : String) -> Parser[String] {
 
 ///|
 pub fn[A, B] discard_left(x : Parser[A], y : Parser[B]) -> Parser[B] {
-  x |> bind(fn { _ => y })
+  x.bind(fn { _ => y })
 }
 
 ///|
 pub fn[A, B] discard_right(x : Parser[A], y : Parser[B]) -> Parser[A] {
-  x |> bind(fn { r => y |> bind(fn { _ => pure(r) }) })
+  x.bind(fn { r => y.bind(fn { _ => pure(r) }) })
 }
 
 ///|
-pub fn[A, B, C] between(
-  x : Parser[A],
+pub fn[A, B, C] Parser::between(
+  self : Parser[A],
   open~ : Parser[B],
   close~ : Parser[C]
 ) -> Parser[A] {
-  open |> discard_left(x) |> discard_right(close)
+  open |> discard_left(self) |> discard_right(close)
 }
 
 ///|
-pub fn one_of(xs : String) -> Parser[Char] {
+pub fn Parser::one_of(xs : String) -> Parser[Char] {
   satisfy(String::contains_char(xs, _)) |> label("one of \{xs.iter()}}")
 }
 
 ///|
-pub fn none_of(xs : String) -> Parser[Char] {
+pub fn Parser::none_of(xs : String) -> Parser[Char] {
   satisfy(fn { ch => not(String::contains_char(xs, ch)) })
   |> label("none of \{xs.iter()}}")
 }
@@ -143,21 +143,21 @@ pub fn none_of(xs : String) -> Parser[Char] {
 ///|
 pub fn[A] foldl1(x : Parser[A], f : Parser[(A, A) -> A]) -> Parser[A] {
   fn go(a) {
-    let acc = f |> bind(fn { f => x |> bind(fn { b => go(f(a, b)) }) })
-    or(acc, pure(a))
+    let acc = f.bind(fn { f => x.bind(fn { b => go(f(a, b)) }) })
+    acc | pure(a)
   }
 
-  x |> bind(go)
+  x.bind(go)
 }
 
 ///|
 pub fn[A, B] map(x : Parser[A], f : (A) -> B) -> Parser[B] {
-  x |> bind(fn { x => pure(f(x)) })
+  x.bind(fn { x => pure(f(x)) })
 }
 
 ///|
-pub fn[A] parens(x : Parser[A]) -> Parser[A] {
-  between(x, open=char('('), close=char(')'))
+pub fn[A] Parser::parens(self : Parser[A]) -> Parser[A] {
+  self.between(open=char('('), close=char(')'))
 }
 
 ///|
@@ -166,37 +166,40 @@ fn digit(input : Input) -> (Char, Input)!ParseError {
 }
 
 ///|
+fnalias Parser::pure
+
+///|
 test {
   let input = Input::new("123456")
   let digit = map(digit, fn { ch => ch.to_int() - '0'.to_int() })
   let integer = foldl1(digit, pure(fn { acc, x => acc * 10 + x }))
-  inspect(run(integer, input), content="123456")
+  inspect(integer.run(input), content="123456")
   let add = char('+') |> discard_left(pure(Int::op_add))
   let sub = char('-') |> discard_left(pure(Int::op_sub))
   let mul = char('*') |> discard_left(pure(Int::op_mul))
   let div = char('/') |> discard_left(pure(Int::op_div))
   fn expr(input) -> (Int, Input)!ParseError {
-    foldl1(term, or(add, sub))(input)
+    foldl1(term, add | sub)(input)
   }
 
   fn term(input) -> (Int, Input)!ParseError {
-    foldl1(factor, or(mul, div))(input)
+    foldl1(factor, mul | div)(input)
   }
 
   fn factor(input) -> (Int, Input)!ParseError {
-    or(parens(expr), integer)(input)
+    (Parser(expr).parens() | integer)(input)
   }
 
   let input = Input::new("(1+2)*3")
-  inspect(run(expr, input), content="9")
-  inspect(run(expr, Input::new("3*3+4*4")), content="25")
+  inspect(Parser(expr).run(input), content="9")
+  inspect(Parser(expr).run(Input::new("3*3+4*4")), content="25")
 }
 
 ///|
 test "or" {
   let x = char('x')
   let y = char('y')
-  let parse = or(x, y) |> label("x or y")
+  let parse = x | y |> label("x or y")
   let input = Input::new("x")
   inspect(
     try? parse(input),
