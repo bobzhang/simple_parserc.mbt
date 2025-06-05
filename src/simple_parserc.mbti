@@ -1,0 +1,61 @@
+package "illusory0x0/simple_parserc"
+
+import(
+  "moonbitlang/core/string"
+)
+
+// Values
+fn any(Input) -> (Char, Input)!ParseError
+
+fn[A, B, C] between((Input) -> (A, Input)!ParseError, open~ : (Input) -> (B, Input)!ParseError, close~ : (Input) -> (C, Input)!ParseError) -> (Input) -> (A, Input)!ParseError
+
+fn[A, B] bind((Input) -> (A, Input)!ParseError, (A) -> (Input) -> (B, Input)!ParseError) -> (Input) -> (B, Input)!ParseError
+
+fn char(Char) -> (Input) -> (Char, Input)!ParseError
+
+fn[A, B] discard_left((Input) -> (A, Input)!ParseError, (Input) -> (B, Input)!ParseError) -> (Input) -> (B, Input)!ParseError
+
+fn[A, B] discard_right((Input) -> (A, Input)!ParseError, (Input) -> (B, Input)!ParseError) -> (Input) -> (A, Input)!ParseError
+
+fn[A] eof(A) -> (Input) -> (A, Input)!ParseError
+
+fn[A] foldl1((Input) -> (A, Input)!ParseError, (Input) -> ((A, A) -> A, Input)!ParseError) -> (Input) -> (A, Input)!ParseError
+
+fn[A] label((Input) -> (A, Input)!ParseError, String) -> (Input) -> (A, Input)!ParseError
+
+fn[A, B] map((Input) -> (A, Input)!ParseError, (A) -> B) -> (Input) -> (B, Input)!ParseError
+
+fn none_of(String) -> (Input) -> (Char, Input)!ParseError
+
+fn one_of(String) -> (Input) -> (Char, Input)!ParseError
+
+fn[A] or((Input) -> (A, Input)!ParseError, (Input) -> (A, Input)!ParseError) -> (Input) -> (A, Input)!ParseError
+
+fn[A] parens((Input) -> (A, Input)!ParseError) -> (Input) -> (A, Input)!ParseError
+
+fn[A] pure(A) -> (Input) -> (A, Input)!ParseError
+
+fn satisfy((Char) -> Bool) -> (Input) -> (Char, Input)!ParseError
+
+fn string(String) -> (Input) -> (String, Input)!ParseError
+
+// Types and methods
+pub(all) struct Input {
+  chars : @string.StringView
+  row : Int
+  col : Int
+}
+fn Input::new(@string.StringView) -> Self
+impl Show for Input
+
+pub(all) type! ParseError {
+  Many(Array[ParseError])
+  Expect(row~ : Int, col~ : Int, String)
+}
+impl Show for ParseError
+
+// Type aliases
+pub typealias Parser[A] = (Input) -> (A, Input)!ParseError
+
+// Traits
+
