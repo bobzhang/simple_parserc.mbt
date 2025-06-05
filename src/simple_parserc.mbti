@@ -35,6 +35,8 @@ fn[A] parens((Input) -> (A, Input)!ParseError) -> (Input) -> (A, Input)!ParseErr
 
 fn[A] pure(A) -> (Input) -> (A, Input)!ParseError
 
+fn[A] run((Input) -> (A, Input)!ParseError, Input) -> A!ParseError
+
 fn satisfy((Char) -> Bool) -> (Input) -> (Char, Input)!ParseError
 
 fn string(String) -> (Input) -> (String, Input)!ParseError
