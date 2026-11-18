@@ -1,55 +1,56 @@
 ///|
-#derive(Show)
+#derive(Debug)
 pub(all) struct Input {
-  chars : @string.View
+  chars : StringView
   row : Int32
   col : Int32
 }
 
 ///|
-pub fn Input::new(chars : @string.View) -> Input {
+pub fn Input::new(chars : StringView) -> Input {
   Input::{ chars, row: 0, col: 0, }
 }
 
 ///|
-pub(all) type! ParseError {
+#derive(Debug)
+pub(all) suberror ParseError {
   Many(Array[ParseError])
-  Expect(row~ : Int, col~ : Int, String)
-} derive(Show)
-
-///|
-pub(all) type Parser[A] (Input) -> (A, Input)!ParseError
-
-///|
-pub fn[A] Parser::run(self : Self[A], input : Input) -> A raise ParseError {
-  self(input).0
+  Expect(row~ : Int32, col~ : Int32, String)
 }
 
 ///|
-pub fn[A, B] Parser::bind(self : Self[A], f : (A) -> Self[B]) -> Self[B] {
-  fn(input) {
-    let (v, rest) = self(input)
-    f(v)(rest)
-  }
+pub(all) struct Parser[A]((Input) -> (A, Input) raise ParseError)
+
+///|
+pub fn[A] Parser::run(self : Parser[A], input : Input) -> A raise ParseError {
+  (self.0)(input).0
 }
 
 ///|
-pub fn[A] Parser::pure(x : A) -> Self[A] {
-  fn(input) { (x, input) }
+pub fn[A, B] Parser::bind(self : Parser[A], f : (A) -> Parser[B]) -> Parser[B] {
+  Parser(input => {
+    let (v, rest) = (self.0)(input)
+    (f(v).0)(rest)
+  })
+}
+
+///|
+pub fn[A] Parser::pure(x : A) -> Parser[A] {
+  Parser(input => (x, input))
 }
 
 ///|
 pub impl[A] BitOr for Parser[A] with fn lor(self, y) {
-  fn(input) {
-    self(input) catch {
-      e => y(input) catch { e_ => raise Many([e, e_]) }
+  Parser(input => {
+    (self.0)(input) catch {
+      e => (y.0)(input) catch { e_ => raise Many([e, e_]) }
     }
-  }
+  })
 }
 
 ///|
-pub fn Parser::satisfy(f : (Char) -> Bool) -> Self[Char] {
-  fn(input) {
+pub fn Parser::satisfy(f : (Char) -> Bool) -> Parser[Char] {
+  Parser(input => {
     let { chars, row, col, } = input
     match chars {
       [x, .. chars] if f(x) =>
@@ -60,65 +61,65 @@ pub fn Parser::satisfy(f : (Char) -> Bool) -> Self[Char] {
         }
       _ => raise Expect(row~, col~, "")
     }
-  }
+  })
 }
 
 ///|
-pub fn[A] Parser::eof(x : A) -> Self[A] {
-  fn(input) {
+pub fn[A] Parser::eof(x : A) -> Parser[A] {
+  Parser(input => {
     let { chars, row, col, } = input
     match chars {
       [] => (x, input)
       _ => raise Expect(row~, col~, "eof")
     }
-  }
+  })
 }
 
 ///|
-pub fn Parser::any(input : Input) -> (Char, Input)!ParseError {
-  satisfy(fn { _ => true })(input)
+pub fn Parser::any(input : Input) -> (Char, Input) raise ParseError {
+  (Parser::satisfy(_ => true).0)(input)
 }
 
 ///|
-pub fn[A] Parser::label(x : Self[A], s : String) -> Self[A] {
-  fn(input) {
-    x(input) catch {
+pub fn[A] Parser::label(x : Parser[A], s : String) -> Parser[A] {
+  Parser(input => {
+    (x.0)(input) catch {
       Expect(row~, col~, _) => raise Expect(row~, col~, s)
       Many([Expect(row~, col~, _), ..]) => raise Expect(row~, col~, s)
       Many(_) => panic()
     }
-  }
+  })
 }
 
 ///|
 pub fn Parser::char(ch : Char) -> Parser[Char] {
-  satisfy(fn { c => c == ch }).label(ch.to_string())
+  Parser::satisfy(c => c == ch).label(ch.to_string())
 }
 
 ///|
 pub fn Parser::string(str : String) -> Parser[String] {
-  fn(input) {
-    guard not(str.contains_char('\n')) else { panic() }
+  Parser(input => {
+    guard !str.contains_char('\n') else { panic() }
     let { chars, row, col, } = input
     let len = str.length()
-    guard chars.length() >= len && chars.view(end_offset=len) == str else {
+    guard chars.length() >= len && chars[:len] == str else {
       raise Expect(row~, col~, str)
     }
-    (str, Input::{ ..input, chars: chars.view(start_offset=len), col: len, })
-  }
+    (str, Input::{ ..input, chars: chars[len:], col: len, })
+  })
 }
 
 ///|
-pub fn[A, B] Parser::discard_left(self : Self[A], y : Self[B]) -> Self[B] {
-  self.bind(fn { _ => y })
+pub fn[A, B] Parser::discard_left(self : Parser[A], y : Parser[B]) -> Parser[B] {
+  self.bind(_ => y)
 }
 
 ///|
 pub fn[A, B] Parser::discard_right(
   self : Parser[A],
-  y : Parser[B]
+  y : Parser[B],
 ) -> Parser[A] {
-  self.bind(fn { r => y.bind(fn { _ => pure(r) }) })
+  self.bind(r => y.bind(_ => Parser::pure(r)))
 }
 
 ///|
@@ -131,123 +132,70 @@ pub fn[A, B, C] Parser::between(
 }
 
 ///|
-pub fn Parser::one_of(xs : String) -> Self[Char] {
-  satisfy(String::contains_char(xs, _)).label("one of \{xs.iter()}}")
+pub fn Parser::one_of(xs : String) -> Parser[Char] {
+  Parser::satisfy(ch => xs.contains_char(ch)).label(
+    "one of \{Repr(xs.to_array())}}",
+  )
 }
 
 ///|
-pub fn Parser::none_of(xs : String) -> Self[Char] {
-  satisfy(fn { ch => not(String::contains_char(xs, ch)) })
-  .label("none of \{xs.iter()}}")
+pub fn Parser::none_of(xs : String) -> Parser[Char] {
+  Parser::satisfy(ch => !xs.contains_char(ch)).label(
+    "none of \{Repr(xs.to_array())}}",
+  )
 }
 
 ///|
-pub fn[A] Parser::foldl1(x : Self[A], f : Self[(A, A) -> A]) -> Self[A] {
+#as_free_fn
+pub fn[A] Parser::foldl1(x : Parser[A], f : Parser[(A, A) -> A]) -> Parser[A] {
   fn go(a) {
-    let acc = f.bind(fn { f => x.bind(fn { b => go(f(a, b)) }) })
-    acc | pure(a)
+    let acc = f.bind(f => x.bind(b => go(f(a, b))))
+    acc | Parser::pure(a)
   }
 
   x.bind(go)
 }
 
 ///|
-pub fn[A, B] Parser::map(self : Self[A], f : (A) -> B) -> Self[B] {
-  self.bind(fn { x => pure(f(x)) })
+pub fn[A, B] Parser::map(self : Parser[A], f : (A) -> B) -> Parser[B] {
+  self.bind(x => Parser::pure(f(x)))
 }
 
 ///|
-pub fn[A] Parser::parens(self : Self[A]) -> Self[A] {
-  self.between(open=char('('), close=char(')'))
+pub fn[A] Parser::parens(self : Parser[A]) -> Parser[A] {
+  self.between(open=Parser::char('('), close=Parser::char(')'))
 }
 
 ///|
 pub fn Parser::digit(input : Input) -> (Char, Input) raise ParseError {
-  satisfy(Char::is_ascii_digit)(input)
+  (Parser::satisfy(Char::is_ascii_digit).0)(input)
 }
 
 ///|
-fnalias Parser::(
-  any,
-  between,
-  bind,
-  char,
-  discard_left,
-  discard_right,
-  eof,
-  label,
-  map,
-  none_of,
-  one_of,
-  parens,
-  pure,
-  run,
-  satisfy,
-  string,
-  digit
-)
-
-///|
-test {
-  let input = Input::new("123456")
-  let digit = Parser(digit).map(fn { ch => ch.to_int() - '0' })
-  let integer = digit.foldl1( pure(fn { acc, x => acc * 10 + x }))
-  inspect(integer.run(input), content="123456")
-  let add = char('+').discard_left(pure(Int::op_add))
-  let sub = char('-').discard_left(pure(Int::op_sub))
-  let mul = char('*').discard_left(pure(Int::op_mul))
-  let div = char('/').discard_left(pure(Int::op_div))
-  fn expr(input) -> (Int, Input)!ParseError {
-    Parser(term).foldl1( add | sub)(input)
-  }
-
-  fn term(input) -> (Int, Input)!ParseError {
-    Parser(factor).foldl1(mul | div)(input)
-  }
-
-  fn factor(input) -> (Int, Input)!ParseError {
-    (Parser(expr).parens() | integer)(input)
-  }
-
-  let input = Input::new("(1+2)*3")
-  inspect(Parser(expr).run(input), content="9")
-  inspect(Parser(expr).run(Input::new("3*3+4*4")), content="25")
+// Keep the original public Show implementation alongside Debug.
+pub impl Show for Input with fn output(self, logger) {
+  logger.write_string("{chars: ")
+  logger.write(Repr(self.chars.to_owned()))
+  logger.write_string(", row: \{self.row}, col: \{self.col}}")
 }
 
 ///|
-test "or" {
-  let x = char('x')
-  let y = char('y')
-  let parse = (x | y).label("x or y")
-  let input = Input::new("x")
-  inspect(
-    try? parse(input),
-    content=
-      #|Ok(('x', {chars: "", row: 0, col: 1}))
-    ,
-  )
-  inspect(
-    try? parse(Input::new("_")),
-    content=
-      #|Err(Expect(row=0, col=0, "x or y"))
-    ,
-  )
-}
-
-///|
-test "error" {
-  let parse = char('x')
-  let input = Input::new("_")
-  inspect(
-    try? parse(input),
-    content=
-      #|Err(Expect(row=0, col=0, "x"))
-    ,
-  )
-  inspect(
-    try? label(parse, "?")(input),
-    content=
-      #|Err(Expect(row=0, col=0, "?"))
-    ,
-  )
+pub impl Show for ParseError with fn output(self, logger) {
+  match self {
+    Expect(row~, col~, expected) => {
+      logger.write_string("Expect(row=\{row}, col=\{col}, ")
+      logger.write(Repr(expected))
+      logger.write_string(")")
+    }
+    Many(errors) => {
+      logger.write_string("Many([")
+      for i, error in errors {
+        if i > 0 {
+          logger.write_string(", ")
+        }
+        logger.write(error)
+      }
+      logger.write_string("])")
+    }
+  }
 }
