@@ -1,13 +1,14 @@
 ///|
+#derive(Show)
 pub(all) struct Input {
   chars : @string.View
-  row : Int
-  col : Int
-} derive(Show)
+  row : Int32
+  col : Int32
+}
 
 ///|
 pub fn Input::new(chars : @string.View) -> Input {
-  Input::{ chars, row: 0, col: 0 }
+  Input::{ chars, row: 0, col: 0, }
 }
 
 ///|
@@ -20,7 +21,7 @@ pub(all) type! ParseError {
 pub(all) type Parser[A] (Input) -> (A, Input)!ParseError
 
 ///|
-pub fn[A] Parser::run(self : Self[A], input : Input) -> A!ParseError {
+pub fn[A] Parser::run(self : Self[A], input : Input) -> A raise ParseError {
   self(input).0
 }
 
@@ -38,13 +39,10 @@ pub fn[A] Parser::pure(x : A) -> Self[A] {
 }
 
 ///|
-pub impl[A] BitOr for Parser[A] with lor(self, y) {
+pub impl[A] BitOr for Parser[A] with fn lor(self, y) {
   fn(input) {
-    try self(input) catch {
-      e =>
-        try y(input) catch {
-          e_ => raise Many([e, e_])
-        }
+    self(input) catch {
+      e => y(input) catch { e_ => raise Many([e, e_]) }
     }
   }
 }
@@ -52,13 +50,13 @@ pub impl[A] BitOr for Parser[A] with lor(self, y) {
 ///|
 pub fn Parser::satisfy(f : (Char) -> Bool) -> Self[Char] {
   fn(input) {
-    let { chars, row, col } = input
+    let { chars, row, col, } = input
     match chars {
       [x, .. chars] if f(x) =>
         if x == '\n' {
-          (x, Input::{ chars, row: row + 1, col: 0 })
+          (x, Input::{ chars, row: row + 1, col: 0, })
         } else {
-          (x, Input::{ ..input, chars, col: col + 1 })
+          (x, Input::{ ..input, chars, col: col + 1, })
         }
       _ => raise Expect(row~, col~, "")
     }
@@ -68,7 +66,7 @@ pub fn Parser::satisfy(f : (Char) -> Bool) -> Self[Char] {
 ///|
 pub fn[A] Parser::eof(x : A) -> Self[A] {
   fn(input) {
-    let { chars, row, col } = input
+    let { chars, row, col, } = input
     match chars {
       [] => (x, input)
       _ => raise Expect(row~, col~, "eof")
@@ -84,7 +82,7 @@ pub fn Parser::any(input : Input) -> (Char, Input)!ParseError {
 ///|
 pub fn[A] Parser::label(x : Self[A], s : String) -> Self[A] {
   fn(input) {
-    try x(input) catch {
+    x(input) catch {
       Expect(row~, col~, _) => raise Expect(row~, col~, s)
       Many([Expect(row~, col~, _), ..]) => raise Expect(row~, col~, s)
       Many(_) => panic()
@@ -101,12 +99,12 @@ pub fn Parser::char(ch : Char) -> Parser[Char] {
 pub fn Parser::string(str : String) -> Parser[String] {
   fn(input) {
     guard not(str.contains_char('\n')) else { panic() }
-    let { chars, row, col } = input
+    let { chars, row, col, } = input
     let len = str.length()
     guard chars.length() >= len && chars.view(end_offset=len) == str else {
       raise Expect(row~, col~, str)
     }
-    (str, Input::{ ..input, chars: chars.view(start_offset=len), col: len })
+    (str, Input::{ ..input, chars: chars.view(start_offset=len), col: len, })
   }
 }
 
@@ -127,14 +125,14 @@ pub fn[A, B] Parser::discard_right(
 pub fn[A, B, C] Parser::between(
   self : Parser[A],
   open~ : Parser[B],
-  close~ : Parser[C]
+  close~ : Parser[C],
 ) -> Parser[A] {
   open.discard_left(self).discard_right(close)
 }
 
 ///|
 pub fn Parser::one_of(xs : String) -> Self[Char] {
-  satisfy(String::contains_char(xs, _)) .label("one of \{xs.iter()}}")
+  satisfy(String::contains_char(xs, _)).label("one of \{xs.iter()}}")
 }
 
 ///|
@@ -164,7 +162,7 @@ pub fn[A] Parser::parens(self : Self[A]) -> Self[A] {
 }
 
 ///|
-pub fn Parser::digit(input : Input) -> (Char, Input)!ParseError {
+pub fn Parser::digit(input : Input) -> (Char, Input) raise ParseError {
   satisfy(Char::is_ascii_digit)(input)
 }
 
